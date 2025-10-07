@@ -95,8 +95,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, getDoc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- DOM Elements ---
         const codeModal = document.getElementById('code-modal');
@@ -123,16 +123,19 @@
         let username = '';
 
         // --- Firebase Config ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'chocolate-chats-app';
-        let firebaseConfig;
-        try {
-            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        } catch (e) {
-            console.error("Firebase config is not a valid JSON string.");
-            firebaseConfig = null;
-        }
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAwK7lU8Ioc9HiGmQB-uxxU0NvnKQ8n5yk",
+            authDomain: "chocolatechats-a8db7.firebaseapp.com",
+            projectId: "chocolatechats-a8db7",
+            storageBucket: "chocolatechats-a8db7.appspot.com",
+            messagingSenderId: "1032258292687",
+            appId: "1:1032258292687:web:c839c631bddd432ebb20ba",
+            measurementId: "G-11QS15VLYM"
+        };
 
-        if (!firebaseConfig) {
+
+        if (!firebaseConfig || !firebaseConfig.apiKey) {
             console.error("Firebase configuration is missing or invalid.");
             errorMessage.textContent = 'Chat service is unavailable.';
             enterChatBtn.disabled = true;
@@ -155,13 +158,9 @@
                     currentUser = user;
                 } else {
                      try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                           await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                           await signInAnonymously(auth);
-                        }
+                        await signInAnonymously(auth);
                     } catch (error) {
-                        console.error("Authentication failed: ", error);
+                        console.error("Anonymous authentication failed: ", error);
                         errorMessage.textContent = 'Authentication failed.';
                     }
                 }
@@ -218,7 +217,7 @@
                 
                 if (messageText && username && currentUser) {
                     try {
-                        await addDoc(collection(db, `/artifacts/${appId}/public/data/messages`), {
+                        await addDoc(collection(db, "messages"), {
                             text: messageText,
                             senderName: username,
                             senderId: currentUser.uid,
@@ -235,7 +234,7 @@
             
             async function assignUsername() {
                 if (!db || !currentUser) return;
-                const counterRef = doc(db, `/artifacts/${appId}/public/data/`, 'userCounter');
+                const counterRef = doc(db, "counters", "userCounter");
                 
                 try {
                     const userNumber = await runTransaction(db, async (transaction) => {
@@ -262,7 +261,7 @@
             }
 
             function listenForMessages() {
-                 const messagesRef = collection(db, `/artifacts/${appId}/public/data/messages`);
+                 const messagesRef = collection(db, "messages");
                  const q = query(messagesRef); // No orderBy to avoid index requirement
             
                  onSnapshot(q, (snapshot) => {
