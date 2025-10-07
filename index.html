@@ -68,12 +68,30 @@
         </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-confirm-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 hidden">
+        <div class="bg-gray-800 bg-opacity-80 backdrop-blur-md p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center border border-gray-700">
+            <h2 class="text-2xl font-bold mb-4">Are you sure?</h2>
+            <p class="text-gray-300 mb-6">This will permanently delete all messages for everyone. This action cannot be undone.</p>
+            <div class="flex gap-4 mt-4">
+                <button id="cancel-delete-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300">Cancel</button>
+                <button id="confirm-delete-btn" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300">Yes, Delete All</button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Chat Container -->
     <div id="chat-container" class="w-full h-full max-w-4xl mx-auto flex-col bg-black bg-opacity-50 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-700 hidden">
-        <header class="bg-black bg-opacity-30 p-4 text-center rounded-t-2xl">
-            <h1 class="text-3xl font-bold" style="font-family: 'Brush Script MT', cursive;">Chocolate Chats</h1>
-            <p id="user-display" class="text-sm text-amber-300"></p>
+        <header class="bg-black bg-opacity-30 p-4 flex justify-between items-center rounded-t-2xl">
+            <div class="flex-1"></div>
+            <div class="flex-1 text-center">
+                <h1 class="text-3xl font-bold" style="font-family: 'Brush Script MT', cursive;">Chocolate Chats</h1>
+                <p id="user-display" class="text-sm text-amber-300"></p>
+            </div>
+            <div class="flex-1 flex justify-end">
+                 <button id="clear-chat-btn" class="hidden bg-red-700 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 text-sm">Clear Chat</button>
+            </div>
         </header>
 
         <!-- Messages Area -->
@@ -96,7 +114,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, setDoc, runTransaction, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- DOM Elements ---
         const codeModal = document.getElementById('code-modal');
@@ -115,6 +133,10 @@
         const messageInput = document.getElementById('message-input');
         const sendError = document.getElementById('send-error');
         const backgroundMusic = document.getElementById('background-music');
+        const clearChatBtn = document.getElementById('clear-chat-btn');
+        const deleteConfirmModal = document.getElementById('delete-confirm-modal');
+        const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
         
         // --- App State ---
         let db;
@@ -123,7 +145,6 @@
         let username = '';
 
         // --- Firebase Config ---
-        // Your web app's Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyAwK7lU8Ioc9HiGmQB-uxxU0NvnKQ8n5yk",
             authDomain: "chocolatechats-a8db7.firebaseapp.com",
@@ -172,7 +193,6 @@
                     codeModal.classList.add('hidden');
                     ownerModal.classList.remove('hidden');
                     
-                    // Attempt to play background music after user interaction
                     backgroundMusic.play().catch(error => {
                         console.log("Audio autoplay was prevented by the browser:", error);
                     });
@@ -224,13 +244,43 @@
                             createdAt: serverTimestamp()
                         });
                         messageInput.value = '';
+                        sendError.textContent = '';
                     } catch (error) {
                         console.error("Error sending message:", error);
                     }
                 }
             });
+
+            clearChatBtn.addEventListener('click', () => {
+                deleteConfirmModal.classList.remove('hidden');
+            });
+
+            cancelDeleteBtn.addEventListener('click', () => {
+                deleteConfirmModal.classList.add('hidden');
+            });
+
+            confirmDeleteBtn.addEventListener('click', async () => {
+                await deleteAllMessages();
+                deleteConfirmModal.classList.add('hidden');
+            });
             
             // --- Core Functions ---
+            
+            async function deleteAllMessages() {
+                if (!db) return;
+                const messagesRef = collection(db, "messages");
+                try {
+                    const querySnapshot = await getDocs(messagesRef);
+                    const batch = writeBatch(db);
+                    querySnapshot.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+                    await batch.commit();
+                    console.log("All messages deleted successfully.");
+                } catch (error) {
+                    console.error("Error deleting messages: ", error);
+                }
+            }
             
             async function assignUsername() {
                 if (!db || !currentUser) return;
@@ -249,7 +299,7 @@
                     username = `User ${userNumber}`;
                 } catch (error) {
                     console.error("Transaction failed: ", error);
-                    username = `User ${Math.floor(Math.random() * 1000)}`; // Fallback
+                    username = `User ${Math.floor(Math.random() * 1000)}`;
                 }
             }
             
@@ -257,12 +307,17 @@
                 ownerModal.classList.add('hidden');
                 chatContainer.style.display = 'flex';
                 userDisplay.textContent = `You are: ${username}`;
+                
+                if (username === 'chocolate waffles vr') {
+                    clearChatBtn.classList.remove('hidden');
+                }
+                
                 listenForMessages();
             }
 
             function listenForMessages() {
                  const messagesRef = collection(db, "messages");
-                 const q = query(messagesRef); // No orderBy to avoid index requirement
+                 const q = query(messagesRef);
             
                  onSnapshot(q, (snapshot) => {
                      let messages = [];
@@ -270,7 +325,6 @@
                          messages.push({ id: doc.id, ...doc.data() });
                      });
             
-                     // Sort messages by timestamp client-side
                      messages.sort((a, b) => {
                         const aTime = a.createdAt ? a.createdAt.toMillis() : 0;
                         const bTime = b.createdAt ? b.createdAt.toMillis() : 0;
@@ -318,18 +372,14 @@
                         messageTextElement.classList.add('text-2xl');
                     }
                     
-                    // Sanitize text content before processing for special formatting
                     const sanitizedText = document.createElement('div');
                     sanitizedText.textContent = msg.text;
                     let processedText = sanitizedText.innerHTML;
 
-                    // Apply special formatting for the owner
                     if (isOwner) {
-                        // Make "gorilla tag" rainbow colored
                         processedText = processedText.replace(/gorilla tag/ig, '<span style="font-weight: bold; background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">gorilla tag</span>');
                     }
                     
-                    // Process for links for everyone
                     const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
                     const linkClass = isOwner ? 'text-black hover:underline' : 'text-amber-300 hover:underline';
                     processedText = processedText.replace(urlRegex, function(url) {
