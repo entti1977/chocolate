@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chocolate Chats</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-image: url('https://images.unsplash.com/photo-1549454223-c423853a73c4?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+        .backdrop-blur-md {
+            backdrop-filter: blur(10px);
+        }
+        #chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-messages::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+        }
+        #chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 10px;
+        }
+        #chat-messages::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.5);
+        }
+        .message-bubble {
+            max-width: 75%;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body class="h-full font-sans bg-gray-900 text-white flex items-center justify-center">
+
+    <!-- Background music audio element -->
+    <audio id="background-music" loop>
+        <source src="https://www.dropbox.com/scl/fi/pdiahtcehwpssoad1cjfc/GorillaMusic.mp3?rlkey=4b1m7cldytnbbeav4d81qqgwc&st=2jbt3ra0&dl=1" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+
+    <!-- Code Entry Modal -->
+    <div id="code-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 bg-opacity-80 backdrop-blur-md p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center border border-gray-700">
+            <h1 class="text-4xl font-bold mb-2" style="font-family: 'Brush Script MT', cursive;">Chocolate Chats</h1>
+            <p class="text-gray-300 mb-6">Enter the secret code to join the chat.</p>
+            <input type="password" id="code-input" class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 text-white text-center text-2xl tracking-widest focus:outline-none focus:ring-2 focus:ring-yellow-600" placeholder="***">
+            <p id="error-message" class="text-red-400 mt-2 h-6"></p>
+            <button id="enter-chat-btn" class="w-full bg-yellow-700 hover:bg-yellow-600 text-white font-bold py-3 px-4 rounded-lg mt-4 transition duration-300 transform hover:scale-105">Enter Chat</button>
+        </div>
+    </div>
+    
+    <!-- Owner Key Modal -->
+    <div id="owner-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-40 p-4 hidden">
+        <div class="bg-gray-800 bg-opacity-80 backdrop-blur-md p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center border border-gray-700">
+            <h2 class="text-2xl font-bold mb-4">Are you the owner?</h2>
+            <p class="text-gray-300 mb-6">Enter the owner key or skip to continue as a user.</p>
+            <input type="password" id="owner-key-input" class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 text-white text-center focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Owner Key (Optional)" maxlength="9">
+             <p id="owner-error-message" class="text-red-400 mt-2 h-6"></p>
+            <div class="flex gap-4 mt-4">
+                <button id="skip-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300">Skip</button>
+                <button id="confirm-owner-btn" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Chat Container -->
+    <div id="chat-container" class="w-full h-full max-w-4xl mx-auto flex-col bg-black bg-opacity-50 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-700 hidden">
+        <header class="bg-black bg-opacity-30 p-4 text-center rounded-t-2xl">
+            <h1 class="text-3xl font-bold" style="font-family: 'Brush Script MT', cursive;">Chocolate Chats</h1>
+            <p id="user-display" class="text-sm text-amber-300"></p>
+        </header>
+
+        <!-- Messages Area -->
+        <div id="chat-messages" class="flex-1 p-4 md:p-6 overflow-y-auto">
+            <!-- Messages will be injected here -->
+        </div>
+
+        <!-- Message Input -->
+        <footer class="p-4 bg-black bg-opacity-30 rounded-b-2xl">
+            <div>
+                <form id="message-form" class="flex gap-3">
+                    <input type="text" id="message-input" class="flex-1 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-600" placeholder="Type your message..." autocomplete="off">
+                    <button type="submit" class="bg-yellow-700 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105">Send</button>
+                </form>
+                <p id="send-error" class="text-red-400 text-sm h-5 mt-1 text-right pr-2"></p>
+            </div>
+        </footer>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, getDoc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // --- DOM Elements ---
+        const codeModal = document.getElementById('code-modal');
+        const ownerModal = document.getElementById('owner-modal');
+        const chatContainer = document.getElementById('chat-container');
+        const codeInput = document.getElementById('code-input');
+        const enterChatBtn = document.getElementById('enter-chat-btn');
+        const errorMessage = document.getElementById('error-message');
+        const ownerErrorMessage = document.getElementById('owner-error-message');
+        const ownerKeyInput = document.getElementById('owner-key-input');
+        const confirmOwnerBtn = document.getElementById('confirm-owner-btn');
+        const skipBtn = document.getElementById('skip-btn');
+        const userDisplay = document.getElementById('user-display');
+        const chatMessages = document.getElementById('chat-messages');
+        const messageForm = document.getElementById('message-form');
+        const messageInput = document.getElementById('message-input');
+        const sendError = document.getElementById('send-error');
+        const backgroundMusic = document.getElementById('background-music');
+        
+        // --- App State ---
+        let db;
+        let auth;
+        let currentUser = null;
+        let username = '';
+
+        // --- Firebase Config ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'chocolate-chats-app';
+        let firebaseConfig;
+        try {
+            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        } catch (e) {
+            console.error("Firebase config is not a valid JSON string.");
+            firebaseConfig = null;
+        }
+
+        if (!firebaseConfig) {
+            console.error("Firebase configuration is missing or invalid.");
+            errorMessage.textContent = 'Chat service is unavailable.';
+            enterChatBtn.disabled = true;
+        } else {
+            // --- Initialize Firebase ---
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+            } catch (e) {
+                console.error("Error initializing Firebase:", e);
+                errorMessage.textContent = 'Could not connect to chat service.';
+                enterChatBtn.disabled = true;
+            }
+
+
+            // --- Authentication ---
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUser = user;
+                } else {
+                     try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                           await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                           await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Authentication failed: ", error);
+                        errorMessage.textContent = 'Authentication failed.';
+                    }
+                }
+            });
+
+            // --- Event Listeners ---
+            const handleCodeEntry = () => {
+                 if (codeInput.value === '531') {
+                    codeModal.classList.add('hidden');
+                    ownerModal.classList.remove('hidden');
+                    
+                    // Attempt to play background music after user interaction
+                    backgroundMusic.play().catch(error => {
+                        console.log("Audio autoplay was prevented by the browser:", error);
+                    });
+
+                } else {
+                    errorMessage.textContent = 'Incorrect code. Please try again.';
+                    codeInput.value = '';
+                }
+            };
+
+            enterChatBtn.addEventListener('click', handleCodeEntry);
+            codeInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleCodeEntry();
+            });
+            
+            confirmOwnerBtn.addEventListener('click', () => {
+                if (ownerKeyInput.value === 'tiggerfan') {
+                    username = 'chocolate waffles vr';
+                    startChat();
+                } else {
+                    ownerErrorMessage.textContent = 'Incorrect owner key.';
+                    ownerKeyInput.value = '';
+                }
+            });
+
+            skipBtn.addEventListener('click', async () => {
+                await assignUsername();
+                startChat();
+            });
+            
+            messageForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const messageText = messageInput.value.trim();
+                const isOwner = username === 'chocolate waffles vr';
+                const containsLink = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig.test(messageText);
+
+                if (containsLink && !isOwner) {
+                    sendError.textContent = 'Only the owner can send links.';
+                    setTimeout(() => { sendError.textContent = '' }, 3000);
+                    return;
+                }
+                
+                if (messageText && username && currentUser) {
+                    try {
+                        await addDoc(collection(db, `/artifacts/${appId}/public/data/messages`), {
+                            text: messageText,
+                            senderName: username,
+                            senderId: currentUser.uid,
+                            createdAt: serverTimestamp()
+                        });
+                        messageInput.value = '';
+                    } catch (error) {
+                        console.error("Error sending message:", error);
+                    }
+                }
+            });
+            
+            // --- Core Functions ---
+            
+            async function assignUsername() {
+                if (!db || !currentUser) return;
+                const counterRef = doc(db, `/artifacts/${appId}/public/data/`, 'userCounter');
+                
+                try {
+                    const userNumber = await runTransaction(db, async (transaction) => {
+                        const counterDoc = await transaction.get(counterRef);
+                        let newCount = 1;
+                        if (counterDoc.exists()) {
+                            newCount = counterDoc.data().count + 1;
+                        }
+                        transaction.set(counterRef, { count: newCount });
+                        return newCount;
+                    });
+                    username = `User ${userNumber}`;
+                } catch (error) {
+                    console.error("Transaction failed: ", error);
+                    username = `User ${Math.floor(Math.random() * 1000)}`; // Fallback
+                }
+            }
+            
+            function startChat() {
+                ownerModal.classList.add('hidden');
+                chatContainer.style.display = 'flex';
+                userDisplay.textContent = `You are: ${username}`;
+                listenForMessages();
+            }
+
+            function listenForMessages() {
+                 const messagesRef = collection(db, `/artifacts/${appId}/public/data/messages`);
+                 const q = query(messagesRef); // No orderBy to avoid index requirement
+            
+                 onSnapshot(q, (snapshot) => {
+                     let messages = [];
+                     snapshot.forEach((doc) => {
+                         messages.push({ id: doc.id, ...doc.data() });
+                     });
+            
+                     // Sort messages by timestamp client-side
+                     messages.sort((a, b) => {
+                        const aTime = a.createdAt ? a.createdAt.toMillis() : 0;
+                        const bTime = b.createdAt ? b.createdAt.toMillis() : 0;
+                        return aTime - bTime;
+                     });
+            
+                     renderMessages(messages);
+                 }, (error) => {
+                     console.error("Error listening for messages:", error);
+                 });
+            }
+            
+            function renderMessages(messages) {
+                chatMessages.innerHTML = '';
+                messages.forEach(msg => {
+                    const isOwner = msg.senderName === 'chocolate waffles vr';
+                    const isCurrentUser = msg.senderId === currentUser.uid;
+
+                    const messageWrapper = document.createElement('div');
+                    messageWrapper.classList.add('flex', 'mb-4');
+
+                    const messageBubble = document.createElement('div');
+                    messageBubble.classList.add('p-3', 'rounded-xl', 'message-bubble');
+
+                    const senderName = document.createElement('div');
+                    senderName.classList.add('font-bold', 'text-sm', 'mb-1');
+                    senderName.textContent = msg.senderName;
+
+                    if (isCurrentUser) {
+                        messageWrapper.classList.add('justify-end');
+                        messageBubble.classList.add('bg-yellow-700', 'text-white');
+                        senderName.classList.add('text-yellow-200');
+                    } else {
+                        messageWrapper.classList.add('justify-start');
+                        messageBubble.classList.add('bg-gray-700', 'text-white');
+                         senderName.classList.add(isOwner ? 'text-amber-400' : 'text-gray-300');
+                    }
+                    
+                    if (isOwner) {
+                         senderName.innerHTML += ' <span class="text-xs text-amber-500">(Owner)</span>';
+                    }
+
+                    const messageTextElement = document.createElement('p');
+                    if(isOwner) {
+                        messageTextElement.classList.add('text-2xl');
+                    }
+                    
+                    // Sanitize text content before processing for special formatting
+                    const sanitizedText = document.createElement('div');
+                    sanitizedText.textContent = msg.text;
+                    let processedText = sanitizedText.innerHTML;
+
+                    // Apply special formatting for the owner
+                    if (isOwner) {
+                        // Make "gorilla tag" rainbow colored
+                        processedText = processedText.replace(/gorilla tag/ig, '<span style="font-weight: bold; background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">gorilla tag</span>');
+                    }
+                    
+                    // Process for links for everyone
+                    const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+                    const linkClass = isOwner ? 'text-black hover:underline' : 'text-amber-300 hover:underline';
+                    processedText = processedText.replace(urlRegex, function(url) {
+                        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="${linkClass}">${url}</a>`;
+                    });
+
+                    messageTextElement.innerHTML = processedText;
+
+                    messageBubble.appendChild(senderName);
+                    messageBubble.appendChild(messageTextElement);
+                    messageWrapper.appendChild(messageBubble);
+                    chatMessages.appendChild(messageWrapper);
+                });
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+    </script>
+</body>
+</html>
+
